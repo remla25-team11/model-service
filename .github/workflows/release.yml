@@ -2,32 +2,42 @@ name: Release to GHCR
 
 on:
   push:
-    tags: ["v*.*.*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 jobs:
   docker:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Login to GitHub Container Registry
+      - name: Parse version info from tag
+        run: |
+          VERSION=${GITHUB_REF:11}
+          MAJOR=$(echo "$VERSION" | cut -d . -f 1)
+          MINOR=$(echo "$VERSION" | cut -d . -f 2)
+          PATCH=$(echo "$VERSION" | cut -d . -f 3)
+          echo "version=$VERSION" >> $GITHUB_ENV
+          echo "version_major=$MAJOR" >> $GITHUB_ENV
+          echo "version_minor=$MINOR" >> $GITHUB_ENV
+          echo "version_patch=$PATCH" >> $GITHUB_ENV
+
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version
+      - name: Build and push Docker images
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Build and push image
-        run: |
-          IMAGE_NAME=ghcr.io/${{ github.repository }}
-          IMAGE_NAME=$(echo $IMAGE_NAME | tr '[:upper:]' '[:lower:]')
-
-          docker build -t $IMAGE_NAME:$VERSION .
-          docker push $IMAGE_NAME:$VERSION
+          IMG="ghcr.io/${{ github.repository }}"
+          IMG=${IMG@L}
+          docker build \
+            --tag $IMG:${{ env.version }} \
+            --tag $IMG:${{ env.version_major }}.${{ env.version_minor }}.latest \
+            --tag $IMG:${{ env.version_major }}.latest \
+            --tag $IMG:latest \
+            .
+          docker push --all-tags $IMG
