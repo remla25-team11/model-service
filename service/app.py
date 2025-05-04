@@ -9,8 +9,8 @@ app = Flask(__name__)
 swagger = Swagger(app)
 
 # Define model paths for local
-MODEL_PATH = "service/model.joblib"
-VECTORIZER_PATH = "service/vectorizer.pkl"
+MODEL_PATH = "service/model.joblib" #change to your path
+VECTORIZER_PATH = "service/vectorizer.pkl" #change to your path
 
 # URLs from environment
 MODEL_URL = os.getenv("MODEL_URL")
