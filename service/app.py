@@ -4,9 +4,11 @@ import joblib
 from flask import Flask, request, jsonify
 from flasgger import Swagger
 from lib_ml.preprocessor import preprocess_text  # Ensure this is correct
+from flask_cors import CORS 
 
 app = Flask(__name__)
 swagger = Swagger(app)
+CORS(app) 
 
 # Define model paths for local
 MODEL_PATH = "service/model.joblib"
