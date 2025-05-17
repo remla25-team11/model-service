@@ -3,8 +3,10 @@ import requests
 import joblib
 from flask import Flask, request, jsonify
 from flasgger import Swagger
+from flask_cors import CORS 
 from lib_ml.preprocessor import preprocess_text  # Ensure this is correct
 from lib_ml import __version__ as lib_ml_version
+
 
 app = Flask(__name__)
 swagger = Swagger(app)
