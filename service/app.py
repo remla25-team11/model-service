@@ -4,13 +4,15 @@ import joblib
 from flask import Flask, request, jsonify
 from flasgger import Swagger
 from lib_ml.preprocessor import preprocess_text  # Ensure this is correct
+from lib_ml import __version__ as lib_ml_version
+
 
 app = Flask(__name__)
 swagger = Swagger(app)
 
 # Define model paths for local
-MODEL_PATH = "service/model.joblib"
-VECTORIZER_PATH = "service/vectorizer.pkl"
+MODEL_PATH = "service/service/model.joblib"
+VECTORIZER_PATH = "service/service/vectorizer.pkl"
 
 # URLs from environment
 MODEL_URL = os.getenv("MODEL_URL")
@@ -73,5 +75,26 @@ def predict():
     sentiment = "positive" if result == 1 else "negative"
     return jsonify({"prediction": sentiment})
 
+@app.route("/version", methods=["GET"])
+def version():
+    """
+    Returns the version of the lib_ml package.
+    ---
+    tags:
+      - Metadata
+    responses:
+      200:
+        description: Library version
+        schema:
+          type: object
+          properties:
+            version:
+              type: string
+              example: "1.2.3"
+    """
+    return jsonify({"version": lib_ml_version})
+
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)
