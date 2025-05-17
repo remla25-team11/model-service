@@ -6,9 +6,9 @@ from flasgger import Swagger
 from lib_ml.preprocessor import preprocess_text  # Ensure this is correct
 from lib_ml import __version__ as lib_ml_version
 
-
 app = Flask(__name__)
 swagger = Swagger(app)
+CORS(app) 
 
 # Define model paths for local
 MODEL_PATH = "service/service/model.joblib"
