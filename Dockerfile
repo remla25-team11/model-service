@@ -14,6 +14,6 @@ COPY service/ service/
 COPY . .
 
 
-EXPOSE 8080
+EXPOSE 8000
 
 CMD ["python", "service/app.py"]
