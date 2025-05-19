@@ -19,6 +19,7 @@ VECTORIZER_PATH = "service/service/vectorizer.pkl"
 # URLs from environment
 MODEL_URL = os.getenv("MODEL_URL")
 VECTORIZER_URL = os.getenv("VECTORIZER_URL")
+MODEL_SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 
 # Download helper
 def download_file(url, path):
@@ -86,23 +87,30 @@ def predict():
 @app.route("/version", methods=["GET"])
 def version():
     """
-    Returns the version of the lib_ml package.
+    Returns the version of the model-service and lib_ml package.
     ---
     tags:
       - Metadata
     responses:
       200:
-        description: Library version
+        description: Version information
         schema:
           type: object
           properties:
-            version:
+            model_service_version:
               type: string
-              example: "1.2.3"
+              example: "1.0.0"
+            lib_ml_version:
+              type: string
+              example: "1.0.0"
     """
-    return jsonify({"version": lib_ml_version})
+    return jsonify({
+        "model_service_version": MODEL_SERVICE_VERSION or "unknown, probs bug, please check",
+        "lib_ml_version": lib_ml_version
+    })
 
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    port = int(os.getenv("PORT", 8000))
+    app.run(host="0.0.0.0", port=port, debug=True)
