@@ -1,6 +1,7 @@
 import os
 import requests
 import joblib
+import logging
 from flask import Flask, request, jsonify
 from flasgger import Swagger
 from flask_cors import CORS 
@@ -21,11 +22,17 @@ MODEL_URL = os.getenv("MODEL_URL")
 VECTORIZER_URL = os.getenv("VECTORIZER_URL")
 MODEL_SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 
+# Basic logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(message)s"
+)
+
 # Download helper
 def download_file(url, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if not os.path.exists(path):
-        print(f"Downloading {url}...")
+        logging.info(f"Downloading {url}...")
         r = requests.get(url)
         r.raise_for_status()
         with open(path, 'wb') as f:
@@ -70,6 +77,7 @@ def predict():
     try:
       data = request.get_json()
       review = data.get("review", "").strip()
+      logging.info("Received review: " + review)
 
       if review == "" or review is None:
         return jsonify({"error": "Missing 'review' field"}), 400
@@ -79,8 +87,11 @@ def predict():
 
       result = int(model.predict(features)[0])  # convert numpy int64 to native int
       sentiment = "positive" if result == 1 else "negative"
+
+      logging.info("Prediction succesful, prediction: " + sentiment)
       return jsonify({"prediction": sentiment})
     except Exception as e:
+        logging.exception("Failed prediction")
         return jsonify({"error": str(e)}), 500
     
 
@@ -104,6 +115,8 @@ def version():
               type: string
               example: "1.0.0"
     """
+    logging.info("Returned model service version: " + MODEL_SERVICE_VERSION)
+    logging.info("Returned mlib-ml version: " + lib_ml_version)
     return jsonify({
         "model_service_version": MODEL_SERVICE_VERSION or "unknown, probs bug, please check",
         "lib_ml_version": lib_ml_version
