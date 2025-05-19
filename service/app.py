@@ -66,16 +66,22 @@ def predict():
           application/json:
             prediction: "positive"
     """
-    data = request.get_json()
-    review = data.get("review", "")
-    if review == "" or review is None:
-      return jsonify({"error": "Missing 'review' field"}), 400
+    try:
+      data = request.get_json()
+      review = data.get("review", "").strip()
 
-    processed = preprocess_text(review)
-    features = vectorizer.transform([processed]).toarray()
-    result = int(model.predict(features)[0])  # convert numpy int64 to native int
-    sentiment = "positive" if result == 1 else "negative"
-    return jsonify({"prediction": sentiment})
+      if review == "" or review is None:
+        return jsonify({"error": "Missing 'review' field"}), 400
+
+      processed = preprocess_text(review)
+      features = vectorizer.transform([processed]).toarray()
+
+      result = int(model.predict(features)[0])  # convert numpy int64 to native int
+      sentiment = "positive" if result == 1 else "negative"
+      return jsonify({"prediction": sentiment})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 
 @app.route("/version", methods=["GET"])
 def version():
