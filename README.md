@@ -14,12 +14,24 @@ This is a Flask-based microservice for predicting sentiment in restaurant review
 
 ---
 
+
 ## How to Run
+
+### Enviroment variable
+- 'MODEL_URL': URL to access the trained mode file
+- 'VECTORIZER_URL': URL to download the trained vectorizer
+- 'PORT': (optional, default: 8000) The port of the Flask server
+- 'SERVICE_VERSION': injected, passed form docker build
 
 ### Run with Docker (recommended)
 
 ```bash
-docker run -p 8080:8080 \
+docker run -p 8000:8000 \
   -e MODEL_URL=https://github.com/remla25-team11/model-training/releases/download/v0.0.1/c2_Classifier_Sentiment_Model \
   -e VECTORIZER_URL=https://github.com/remla25-team11/model-training/releases/download/v0.0.1/c1_BoW_Sentiment_Model.pkl \
   ghcr.io/remla25-team11/model-service:latest
+```
+### API endpoints
+
+- POST /predict
+- GET /version
