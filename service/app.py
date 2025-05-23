@@ -150,5 +150,6 @@ def version():
         return jsonify({"error": "Could not fetch model version", "details": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    #port = int(os.getenv("PORT", 8000))
+    #app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)
