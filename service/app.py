@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 import joblib
 from flask import Flask, request, jsonify
@@ -79,16 +80,25 @@ def predict():
 def version():
     #Get the model version from the model-training repository's latest GitHub release tag.
 
-    github_api_url = "https://api.github.com/repos/remla25-team11/model-training/releases/latest"
+    github_api_url = "https://api.github.com/repos/remla25-team11/model-training/tags" # Changed to fetch all tags
     try:
         response = requests.get(github_api_url)
-        response.raise_for_status() # Raise an exception for HTTP errors
-        release_info = response.json()
-        model_version = release_info.get("tag_name", "unknown")
-        return jsonify({"version": model_version}), 200
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        # If the value is a JSON string, parse it again
+        raw_json = response.json()
+
+        if isinstance(raw_json, str):
+            tags = json.loads(raw_json)
+        else:
+            tags = raw_json
+
+        # Extract the tag
+        latest_version = tags[0]["name"] if tags and "name" in tags[0] else "unknown"
+
+        return jsonify({"version": latest_version})
     except requests.exceptions.RequestException as e:
         print(f"Error fetching model version from GitHub API: {e}")
         return jsonify({"error": "Could not fetch model version", "details": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)
