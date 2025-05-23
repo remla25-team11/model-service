@@ -96,34 +96,6 @@ def predict():
         return jsonify({"error": str(e)}), 500
     
 
-@app.route("/version", methods=["GET"])
-def version():
-    """
-    Returns the version of the model-service and lib_ml package.
-    ---
-    tags:
-      - Metadata
-    responses:
-      200:
-        description: Version information
-        schema:
-          type: object
-          properties:
-            model_service_version:
-              type: string
-              example: "1.0.0"
-            lib_ml_version:
-              type: string
-              example: "1.0.0"
-    """
-    logging.info("Returned model service version: " + MODEL_SERVICE_VERSION)
-    logging.info("Returned mlib-ml version: " + lib_ml_version)
-    return jsonify({
-        "model_service_version": MODEL_SERVICE_VERSION or "unknown, probs bug, please check",
-        "lib_ml_version": lib_ml_version
-    })
-
-
 
 @app.route("/version", methods=["GET"])
 def version():
@@ -150,6 +122,5 @@ def version():
         return jsonify({"error": "Could not fetch model version", "details": str(e)}), 500
 
 if __name__ == "__main__":
-    #port = int(os.getenv("PORT", 8000))
-    #app.run(host="0.0.0.0", port=port, debug=True)
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    port = int(os.getenv("PORT", 8000))
+    app.run(host="0.0.0.0", port=port, debug=True)
