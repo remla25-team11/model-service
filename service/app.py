@@ -124,6 +124,21 @@ def version():
 
 
 
+@app.route("/version", methods=["GET"])
+def version():
+    #Get the model version from the model-training repository's latest GitHub release tag.
+
+    github_api_url = "https://api.github.com/repos/remla25-team11/model-training/releases/latest"
+    try:
+        response = requests.get(github_api_url)
+        response.raise_for_status() # Raise an exception for HTTP errors
+        release_info = response.json()
+        model_version = release_info.get("tag_name", "unknown")
+        return jsonify({"version": model_version}), 200
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching model version from GitHub API: {e}")
+        return jsonify({"error": "Could not fetch model version", "details": str(e)}), 500
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=True)
