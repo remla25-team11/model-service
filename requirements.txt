@@ -5,3 +5,4 @@ joblib
 requests
 lib-ml @ git+https://github.com/remla25-team11/lib-ml@v0.1.3
 flask-cors
+prometheus_client
