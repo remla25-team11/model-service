@@ -3,16 +3,21 @@ import json
 import requests
 import joblib
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flasgger import Swagger
-from flask_cors import CORS 
-from lib_ml.preprocessor import preprocess_text  # Ensure this is correct
+from flask_cors import CORS
+from lib_ml.preprocessor import preprocess_text
 from lib_ml import __version__ as lib_ml_version
 
+# Prometheus client
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 app = Flask(__name__)
 swagger = Swagger(app)
-CORS(app) 
+CORS(app)
+
+# Prometheus counter
+predict_requests_total = Counter("predict_requests_total", "Total number of /predict requests", ["version"])
 
 # Define model paths for local
 MODEL_PATH = "service/service/model.joblib"
@@ -76,36 +81,39 @@ def predict():
             prediction: "positive"
     """
     try:
-      data = request.get_json()
-      review = data.get("review", "").strip()
-      logging.info("Received review: " + review)
+        data = request.get_json()
+        review = data.get("review", "").strip()
+        logging.info("Received review: " + review)
 
-      if review == "" or review is None:
-        return jsonify({"error": "Missing 'review' field"}), 400
+        if review == "" or review is None:
+            return jsonify({"error": "Missing 'review' field"}), 400
 
-      processed = preprocess_text(review)
-      features = vectorizer.transform([processed]).toarray()
+        processed = preprocess_text(review)
+        features = vectorizer.transform([processed]).toarray()
 
-      result = int(model.predict(features)[0])  # convert numpy int64 to native int
-      sentiment = "positive" if result == 1 else "negative"
+        result = int(model.predict(features)[0])
+        sentiment = "positive" if result == 1 else "negative"
 
-      logging.info("Prediction succesful, prediction: " + sentiment)
-      return jsonify({"prediction": sentiment})
+        logging.info("Prediction successful, prediction: " + sentiment)
+
+        # Increment Prometheus counter
+        predict_requests_total.labels(version=os.getenv("SERVICE_VERSION", "unknown")).inc()
+
+        return jsonify({"prediction": sentiment})
     except Exception as e:
         logging.exception("Failed prediction")
         return jsonify({"error": str(e)}), 500
-    
 
+@app.route("/metrics")
+def metrics():
+    return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 @app.route("/version", methods=["GET"])
 def version():
-    #Get the model version from the model-training repository's latest GitHub release tag.
-
-    github_api_url = "https://api.github.com/repos/remla25-team11/model-training/tags" # Changed to fetch all tags
+    github_api_url = "https://api.github.com/repos/remla25-team11/model-training/tags"
     try:
         response = requests.get(github_api_url)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        # If the value is a JSON string, parse it again
+        response.raise_for_status()
         raw_json = response.json()
 
         if isinstance(raw_json, str):
@@ -113,9 +121,7 @@ def version():
         else:
             tags = raw_json
 
-        # Extract the tag
         latest_version = tags[0]["name"] if tags and "name" in tags[0] else "unknown"
-
         return jsonify({"version": latest_version})
     except requests.exceptions.RequestException as e:
         print(f"Error fetching model version from GitHub API: {e}")
