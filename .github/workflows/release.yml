@@ -47,10 +47,7 @@ jobs:
           IMG="ghcr.io/${{ github.repository }}"
           IMG=${IMG@L}
           docker build \
-            -f model-service/Dockerfile \
-            --build-arg SERVICE_VERSION=${{ env.SERVICE_VERSION }} \
-            --build-arg MODEL_URL=${{ secrets.MODEL_URL }} \
-            --build-arg VECTORIZER_URL=${{ secrets.VECTORIZER_URL }} \
+            --build-arg SERVICE_VERSION=${{ env.version }} \
             --tag $IMG:${{ env.version }} \
             --tag $IMG:${{ env.version_major }}.${{ env.version_minor }}.latest \
             --tag $IMG:${{ env.version_major }}.latest \
