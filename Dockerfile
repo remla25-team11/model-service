@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl && rm 
 
 # Copy and install Python requirements
 # Path is relative to the build context (project root)
-COPY model-service/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create the directory for the models
@@ -34,7 +34,7 @@ RUN curl -L -o /app/models/c1_BoW_Sentiment_Model.pkl "${VECTORIZER_URL}"
 
 # Copy your application code
 # Path is relative to the build context (project root)
-COPY model-service/service/ ./service/
+COPY service/ ./service/
 
 # --- DEFINITIVE DEBUGGING STEP ---
 # This command will FAIL the build if the old, hardcoded path is found in app.py.
