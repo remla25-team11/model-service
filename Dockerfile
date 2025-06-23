@@ -40,7 +40,6 @@ COPY model-service/service/ ./service/
 # This command will FAIL the build if the old, hardcoded path is found in app.py.
 # If the build SUCCEEDS past this step, your app.py file is correct.
 RUN ! grep -q "service/service/model.joblib" ./service/app.py
-RUN python -m nltk.downloader stopwords
 
 EXPOSE 8000
 
