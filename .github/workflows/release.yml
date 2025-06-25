@@ -41,17 +41,27 @@ jobs:
             registry: ghcr.io
             username: ${{ github.actor }}
             password: ${{ secrets.GH_TOKEN }}
+      - name: Debug stuff
+        run: |
+          echo "GITHUB_REF: $GITHUB_REF"
+          echo "SERVICE_VERSION=${{ env.SERVICE_VERSION }}"
+          echo "version=${{ env.version }}"
 
+            
       - name: Build and push Docker images
         run: |
           IMG="ghcr.io/${{ github.repository }}"
           IMG=${IMG@L}
           docker build \
             --build-arg SERVICE_VERSION=${{ env.version }} \
+            --build-arg MODEL_URL="https://github.com/remla25-team11/model-training/releases/download/v0.0.1/c2_Classifier_Sentiment_Model" \
+            --build-arg VECTORIZER_URL="https://github.com/remla25-team11/model-training/releases/download/v0.0.1/c1_BoW_Sentiment_Model.pkl" \
             --tag $IMG:${{ env.version }} \
             --tag $IMG:${{ env.version_major }}.${{ env.version_minor }}.latest \
             --tag $IMG:${{ env.version_major }}.latest \
             --tag $IMG:latest \
             .
           docker push --all-tags $IMG
+
+          
           
