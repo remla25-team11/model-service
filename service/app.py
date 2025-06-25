@@ -1,28 +1,73 @@
+# In model-service/service/app.py
+
 import os
+import json
 import requests
 import joblib
 import logging
 from flask import Flask, request, jsonify, Response
 from flasgger import Swagger
-from flask_cors import CORS 
-from lib_ml.preprocessor import preprocess_text  # Ensure this is correct
+from flask_cors import CORS
+
+from lib_ml.preprocessor import preprocess_text
 from lib_ml import __version__ as lib_ml_version
+
+# Prometheus client
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
-app = Flask(__name__)
-swagger = Swagger(app)
-CORS(app) 
+# --- THIS IS THE CRITICAL SECTION TO FIX ---
 
-# Define model paths for local
-MODEL_PATH = "service/service/model.joblib"
-VECTORIZER_PATH = "service/service/vectorizer.pkl"
+# Get model paths from environment variables set by Kubernetes/Helm.
+# These paths point to files *inside* the Docker image.
+# There are no default fallbacks, so the app will fail fast if the env vars are missing.
+MODEL_PATH = os.getenv("MODEL_PATH")
+VECTORIZER_PATH = os.getenv("VECTORIZER_PATH")
+SERVICE_VERSION = os.getenv("SERVICE_VERSION", "unknown")
 
-# URLs from environment
-MODEL_URL = os.getenv("MODEL_URL")
-VECTORIZER_URL = os.getenv("VECTORIZER_URL")
-MODEL_SERVICE_VERSION = os.getenv("SERVICE_VERSION")
+# Check if the environment variables are set
+if not MODEL_PATH or not VECTORIZER_PATH:
+    logging.error("FATAL: MODEL_PATH or VECTORIZER_PATH environment variables not set.")
+    # Exit with a non-zero code to make the container crash clearly if not configured.
+    exit(1)
 
-#Counter to count the total predictions
+
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] %(message)s"
+)
+
+
+
+# Load the models at startup, these files should already be in the image.
+try:
+    logging.info(f"Attempting to load model from: {MODEL_PATH}")
+    model = joblib.load(MODEL_PATH)
+    logging.info("Model loaded successfully.")
+
+    logging.info(f"Attempting to load vectorizer from: {VECTORIZER_PATH}")
+    vectorizer = joblib.load(VECTORIZER_PATH)
+    logging.info("Vectorizer loaded successfully.")
+
+except FileNotFoundError as e:
+    logging.error(f"FATAL: Error loading model files: {e}")
+    logging.error("Please ensure the model files were correctly downloaded/copied in the Dockerfile.")
+    # Exit with a non-zero code
+    exit(1)
+except Exception as e:
+    logging.error(f"FATAL: An unexpected error occurred during model loading: {e}")
+    exit(1)
+    
+    
+# Prometheus counter for /predict requests
+predict_requests_total = Counter(
+    "predict_requests_total",
+    "Total number of /predict requests",
+    ["version"] # Label for the service version
+)
+
+#Counter to count the sentiment predictions
 sentiment_predictions_total = Counter(
   'sentiment_predictions_total',
   'Number of sentiment predictions',
@@ -36,31 +81,12 @@ error_predictions_total = Counter(
   ['error_type']
 )
 
-# Basic logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(message)s"
-)
+# --- END OF CRITICAL SECTION ---
 
-# Download helper
-def download_file(url, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    if not os.path.exists(path):
-        logging.info(f"Downloading {url}...")
-        r = requests.get(url)
-        r.raise_for_status()
-        with open(path, 'wb') as f:
-            f.write(r.content)
-
-# Download model/vectorizer if missing
-if MODEL_URL:
-    download_file(MODEL_URL, MODEL_PATH)
-if VECTORIZER_URL:
-    download_file(VECTORIZER_URL, VECTORIZER_PATH)
-
-# Load once
-model = joblib.load(MODEL_PATH)
-vectorizer = joblib.load(VECTORIZER_PATH)
+# Initialize Flask App
+app = Flask(__name__)
+swagger = Swagger(app)
+CORS(app)
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -87,25 +113,32 @@ def predict():
         examples:
           application/json:
             prediction: "positive"
+            version: "1.0"
     """
     try:
-      data = request.get_json()
-      review = data.get("review", "").strip()
-      logging.info("Received review: " + review)
+        data = request.get_json()
+        if not data or "review" not in data:
+            return jsonify({"error": "Missing 'review' in request body"}), 400
 
-      if review == "" or review is None:
-        return jsonify({"error": "Missing 'review' field"}), 400
+        review = data["review"].strip()
+        if not review:
+            return jsonify({"error": "'review' field cannot be empty"}), 400
 
-      processed = preprocess_text(review)
-      features = vectorizer.transform([processed]).toarray()
+        logging.info(f"Received review: '{review}'")
 
-      result = int(model.predict(features)[0])  # convert numpy int64 to native int
-      sentiment = "positive" if result == 1 else "negative"
+        processed_text = preprocess_text(review)
+        features = vectorizer.transform([processed_text]).toarray()
+        prediction = int(model.predict(features)[0])
+        sentiment = "positive" if prediction == 1 else "negative"
 
-      sentiment_predictions_total.labels(label=sentiment, version=MODEL_SERVICE_VERSION).inc()
+        logging.info(f"Prediction successful, sentiment: {sentiment}")
 
-      logging.info("Prediction succesful, prediction: " + sentiment)
-      return jsonify({"prediction": sentiment})
+        # Increment Prometheus counter with the service version
+        predict_requests_total.labels(version=SERVICE_VERSION).inc()
+        sentiment_predictions_total.labels(label=sentiment, version=SERVICE_VERSION).inc()
+
+        logging.info("Prediction succesful, prediction: " + sentiment)
+        return jsonify({"prediction": sentiment, "version": SERVICE_VERSION})
     except Exception as e:
         type_error = type(e).__name__
         error_predictions_total.labels(error_type=type_error).inc()
@@ -113,38 +146,22 @@ def predict():
         return jsonify({"error": str(e)}), 500
     
 
-@app.route("/version", methods=["GET"])
-def version():
-    """
-    Returns the version of the model-service and lib_ml package.
-    ---
-    tags:
-      - Metadata
-    responses:
-      200:
-        description: Version information
-        schema:
-          type: object
-          properties:
-            model_service_version:
-              type: string
-              example: "1.0.0"
-            lib_ml_version:
-              type: string
-              example: "1.0.0"
-    """
-    logging.info("Returned model service version: " + MODEL_SERVICE_VERSION)
-    logging.info("Returned mlib-ml version: " + lib_ml_version)
-    return jsonify({
-        "model_service_version": MODEL_SERVICE_VERSION or "unknown, probs bug, please check",
-        "lib_ml_version": lib_ml_version
-    })
-
 @app.route("/metrics")
 def metrics():
+    """Endpoint for Prometheus to scrape metrics."""
     return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
+@app.route("/version", methods=["GET"])
+def version():
+    """Returns the version of the service."""
+    return jsonify({"version": SERVICE_VERSION})
+
+@app.route('/health', methods=['GET'])
+def health():
+    """A simple health check endpoint for Kubernetes probes."""
+    # A more advanced check could verify model loading, but for now this is fine.
+    return jsonify({'status': 'ok'}), 200
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    # This block is for local development, not used by 'flask run' or Gunicorn
+    app.run(host="0.0.0.0", port=8000, debug=True)
