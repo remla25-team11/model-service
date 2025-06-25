@@ -2,12 +2,12 @@ import os
 import requests
 import joblib
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flasgger import Swagger
 from flask_cors import CORS 
 from lib_ml.preprocessor import preprocess_text  # Ensure this is correct
 from lib_ml import __version__ as lib_ml_version
-
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 app = Flask(__name__)
 swagger = Swagger(app)
@@ -21,6 +21,20 @@ VECTORIZER_PATH = "service/service/vectorizer.pkl"
 MODEL_URL = os.getenv("MODEL_URL")
 VECTORIZER_URL = os.getenv("VECTORIZER_URL")
 MODEL_SERVICE_VERSION = os.getenv("SERVICE_VERSION")
+
+#Counter to count the total predictions
+sentiment_predictions_total = Counter(
+  'sentiment_predictions_total',
+  'Number of sentiment predictions',
+  ['label', 'version']
+)
+
+#Counter to count the total errors
+error_predictions_total = Counter(
+  'error_predictions_total',
+  'Number of errors during predictions',
+  ['error_type']
+)
 
 # Basic logging
 logging.basicConfig(
@@ -88,9 +102,13 @@ def predict():
       result = int(model.predict(features)[0])  # convert numpy int64 to native int
       sentiment = "positive" if result == 1 else "negative"
 
+      sentiment_predictions_total.labels(label=sentiment, version=MODEL_SERVICE_VERSION).inc()
+
       logging.info("Prediction succesful, prediction: " + sentiment)
       return jsonify({"prediction": sentiment})
     except Exception as e:
+        type_error = type(e).__name__
+        error_predictions_total.labels(error_type=type_error).inc()
         logging.exception("Failed prediction")
         return jsonify({"error": str(e)}), 500
     
@@ -122,6 +140,9 @@ def version():
         "lib_ml_version": lib_ml_version
     })
 
+@app.route("/metrics")
+def metrics():
+    return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
 
 if __name__ == "__main__":
