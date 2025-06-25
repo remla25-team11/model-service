@@ -8,19 +8,14 @@ import logging
 from flask import Flask, request, jsonify, Response
 from flasgger import Swagger
 from flask_cors import CORS
-# Assuming lib_ml is installed from your requirements.txt
+
 from lib_ml.preprocessor import preprocess_text
+from lib_ml import __version__ as lib_ml_version
 
 # Prometheus client
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 # --- THIS IS THE CRITICAL SECTION TO FIX ---
-
-# Basic logging setup
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] [%(levelname)s] %(message)s"
-)
 
 # Get model paths from environment variables set by Kubernetes/Helm.
 # These paths point to files *inside* the Docker image.
@@ -34,6 +29,16 @@ if not MODEL_PATH or not VECTORIZER_PATH:
     logging.error("FATAL: MODEL_PATH or VECTORIZER_PATH environment variables not set.")
     # Exit with a non-zero code to make the container crash clearly if not configured.
     exit(1)
+
+
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] %(message)s"
+)
+
+
 
 # Load the models at startup, these files should already be in the image.
 try:
@@ -53,21 +58,35 @@ except FileNotFoundError as e:
 except Exception as e:
     logging.error(f"FATAL: An unexpected error occurred during model loading: {e}")
     exit(1)
-
-# --- END OF CRITICAL SECTION ---
-
-
-# Initialize Flask App
-app = Flask(__name__)
-swagger = Swagger(app)
-CORS(app)
-
+    
+    
 # Prometheus counter for /predict requests
 predict_requests_total = Counter(
     "predict_requests_total",
     "Total number of /predict requests",
     ["version"] # Label for the service version
 )
+
+#Counter to count the sentiment predictions
+sentiment_predictions_total = Counter(
+  'sentiment_predictions_total',
+  'Number of sentiment predictions',
+  ['label', 'version']
+)
+
+#Counter to count the total errors
+error_predictions_total = Counter(
+  'error_predictions_total',
+  'Number of errors during predictions',
+  ['error_type']
+)
+
+# --- END OF CRITICAL SECTION ---
+
+# Initialize Flask App
+app = Flask(__name__)
+swagger = Swagger(app)
+CORS(app)
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -116,12 +135,16 @@ def predict():
 
         # Increment Prometheus counter with the service version
         predict_requests_total.labels(version=SERVICE_VERSION).inc()
+        sentiment_predictions_total.labels(label=sentiment, version=SERVICE_VERSION).inc()
 
+        logging.info("Prediction succesful, prediction: " + sentiment)
         return jsonify({"prediction": sentiment, "version": SERVICE_VERSION})
-
     except Exception as e:
-        logging.exception("Prediction failed")
-        return jsonify({"error": "An internal error occurred", "details": str(e)}), 500
+        type_error = type(e).__name__
+        error_predictions_total.labels(error_type=type_error).inc()
+        logging.exception("Failed prediction")
+        return jsonify({"error": str(e)}), 500
+    
 
 @app.route("/metrics")
 def metrics():
